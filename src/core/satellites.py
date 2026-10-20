@@ -28,6 +28,9 @@ SATELLITES: dict[str, SatelliteConfig] = {
         norad_id=41456,
         prospective_collection_enabled=False,
     ),
+    "sentinel1c": SatelliteConfig(
+        key="sentinel1c", name="Sentinel-1C", short_name="S1C", norad_id=62261,
+    ),
 }
 
 
