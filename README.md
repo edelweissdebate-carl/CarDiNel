@@ -115,6 +115,52 @@ per-capture measurements, not a fitted population reliability probability.
 The original historical calculations and GUI are unchanged. Recent date
 arguments alone do not make a historical reconstruction prospective.
 
+## 3. Historical evaluation on an exact epoch-based grid
+
+For new historical analyses use the following command rather than the legacy
+batch CSV/report pipeline:
+
+```powershell
+python -m src.core.historical_validation --satellite sentinel1c --tle-file "data/sentinel1c/tle/sentinel1c_sampled_2026-09-01_to_2026-09-01.tle"
+```
+
+By default it reads the satellite's existing reference directory and evaluates
+every TLE in the explicitly supplied catalog. Use a sampled catalog to retain
+the chosen one-TLE-per-day design. Defaults are 24 hours, 60-second spacing and
+1, 2, 5 and 10 km thresholds. Both endpoints are included: **1,441 states**.
+This is historical reconstruction from the TLE epoch, not evidence that the
+TLE was publicly available at that epoch and not a prospective capture.
+
+The command reuses the prospective validator's metadata and full-coverage checks,
+TEME-to-ITRS transformation, interpolation and horizon calculation. Each complete
+case is published to a new directory under `results/historical_validation/`.
+It saves `errors.csv`, `horizons.csv`, `error_plot.png`, `summary.json`,
+the reconstructed TEME trajectory, the evaluated TLE, a copy of the source
+catalog, copies of reference files and the Earth orientation table used.
+Inputs and previous outputs are preserved. An incomplete or failed case
+publishes no result directory, and the command exits unsuccessfully if any
+case could not be evaluated.
+
+Every elapsed time starts at the TLE epoch. Horizons distinguish the first
+sampled exceedance, the bracket between neighboring samples, a linear crossing
+estimate and right censoring. Initial exceedance is zero because the initial
+epoch is actually evaluated. A censored estimate stays blank rather than
+becoming a supposed 24-hour crossing. Fine-scale crossings between samples can
+still be missed. The summary labels the evaluation `retrospective` and records
+the reference grade, hashes, software versions and processing time.
+
+Optional flags: `--reference-dir`, `--product POE|MOE`, `--duration-hours`,
+`--step-seconds`, `--thresholds-km`, `--output-root`, and `--no-plot`.
+The supported reference format remains Sentinel-1 Earth Explorer EOF.
+This command does not add Sentinel-3 support.
+
+The original `batch_analyzer`, its CSVs and its downstream statistics/report
+modules remain legacy tools. They use reference-aligned sampling and an
+interpolated horizon relative to the first reference sample, historically
+labelled `exact`. That label must not be interpreted as an exact physical
+crossing. Do not feed the new historical output files into the legacy report
+pipeline or pool measurements with different horizon definitions.
+
 ## Checks
 
 ```powershell
