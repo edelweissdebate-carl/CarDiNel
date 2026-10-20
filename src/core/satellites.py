@@ -11,6 +11,7 @@ class SatelliteConfig:
     name: str
     short_name: str
     norad_id: int
+    prospective_collection_enabled: bool = True
 
 
 SATELLITES: dict[str, SatelliteConfig] = {
@@ -25,6 +26,7 @@ SATELLITES: dict[str, SatelliteConfig] = {
         name="Sentinel-1B",
         short_name="S1B",
         norad_id=41456,
+        prospective_collection_enabled=False,
     ),
 }
 
