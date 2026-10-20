@@ -5,6 +5,7 @@ import math
 import tempfile
 import unittest
 import zipfile
+import requests
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
@@ -103,6 +104,8 @@ class Response:
         return self.payload
     def iter_content(self, chunk_size):
         yield self.content
+    def close(self):
+        pass
 
 
 class Session:
@@ -251,6 +254,46 @@ class SwarmTests(unittest.TestCase):
         with self.assertRaises((ValueError, zipfile.BadZipFile)):
             download_swarm_orbits("swarma", BASE.date(), BASE.date(), self.root / "invalid", session=invalid)
         self.assertEqual(list((self.root / "invalid").glob("*.ZIP")), [])
+
+    def test_interrupted_download_restarts_and_publishes_only_complete_zip(self):
+        class Interrupted(Response):
+            def iter_content(self, chunk_size):
+                yield b"partial transfer that must be discarded"
+                raise requests.exceptions.ChunkedEncodingError("interrupted fixture")
+        session = Session(self.entries(), self.data)
+        responses = [Interrupted(), Response(content=self.data)]
+        original_get = session.get
+        def get(url, params, **kwargs):
+            if params["do"] == "download":
+                session.calls.append(params)
+                return responses.pop(0)
+            return original_get(url, params, **kwargs)
+        session.get = get
+        destination = self.root / "retried"
+        with patch("src.io.swarm_orbits.sleep"):
+            paths = download_swarm_orbits("swarma", BASE.date(), BASE.date(), destination, session=session)
+        self.assertEqual(paths[0].read_bytes(), self.data)
+        self.assertEqual(len(responses), 0)
+        self.assertEqual(list(destination.glob(".partial-*")), [])
+
+    def test_repeated_stream_failure_is_bounded_and_publishes_no_zip(self):
+        class Interrupted(Response):
+            def iter_content(self, chunk_size):
+                yield b"partial"
+                raise requests.exceptions.ChunkedEncodingError("interrupted fixture")
+        session = Session(self.entries(), self.data)
+        original_get = session.get
+        def get(url, params, **kwargs):
+            if params["do"] == "download":
+                session.calls.append(params)
+                return Interrupted()
+            return original_get(url, params, **kwargs)
+        session.get = get
+        destination = self.root / "failed-retries"
+        with patch("src.io.swarm_orbits.sleep"), self.assertRaises(requests.exceptions.ChunkedEncodingError):
+            download_swarm_orbits("swarma", BASE.date(), BASE.date(), destination, session=session)
+        self.assertEqual(sum(call["do"] == "download" for call in session.calls), 3)
+        self.assertEqual(list(destination.iterdir()), [])
 
     def test_historical_and_prospective_paths_use_swarm_references(self):
         tle_text = tle_fixture()

@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
+from time import sleep
 from urllib.parse import urlencode
 
 import requests
@@ -316,6 +317,33 @@ def discover_swarm_products(
     raise RuntimeError("ESA Swarm listing exceeded the discovery page limit.")
 
 
+def _download_zip(session, product: SwarmProduct, staging: Path):
+    # Adapter retries cover connections/headers; streamed body failures need a
+    # fresh request and a truncated staging file. Never publish a partial ZIP.
+    for attempt in range(3):
+        response = None
+        try:
+            response = session.get(ARCHIVE_URL, params={"do": "download", "file": product.archive_path},
+                                   timeout=(30, 90), stream=True)
+            response.raise_for_status()
+            size = 0
+            with staging.open("wb") as stream:
+                for block in response.iter_content(chunk_size=65536):
+                    size += len(block)
+                    if size > MAX_ZIP_BYTES:
+                        raise ValueError("Swarm download exceeds the expected size limit.")
+                    stream.write(block)
+            return
+        except (requests.ConnectionError, requests.Timeout, requests.exceptions.ChunkedEncodingError):
+            if attempt == 2:
+                raise
+            print(f"Temporary transfer failure; restarting {product.filename} ({attempt + 2}/3)...")
+            sleep(2 ** attempt)
+        finally:
+            if response is not None:
+                response.close()
+
+
 def download_swarm_orbits(
     satellite_key: str, start_date: date, end_date: date, output_folder: Path, *, session=None,
 ) -> list[Path]:
@@ -340,18 +368,9 @@ def download_swarm_orbits(
             print(f"[{number}/{len(products)}] Reusing validated ZIP: {target.name}")
         else:
             print(f"[{number}/{len(products)}] Downloading: {target.name}")
-            response = session.get(ARCHIVE_URL, params={"do": "download", "file": product.archive_path},
-                                   timeout=(30, 90), stream=True)
-            response.raise_for_status()
             with tempfile.TemporaryDirectory(dir=destination, prefix=".partial-") as temporary:
                 staging = Path(temporary) / product.filename
-                size = 0
-                with staging.open("wb") as stream:
-                    for block in response.iter_content(chunk_size=65536):
-                        size += len(block)
-                        if size > MAX_ZIP_BYTES:
-                            raise ValueError("Swarm download exceeds the expected size limit.")
-                        stream.write(block)
+                _download_zip(session, product, staging)
                 _, item = read_swarm_product(staging, config)
                 os.replace(staging, target)
             item["source_path"] = str(target.resolve())

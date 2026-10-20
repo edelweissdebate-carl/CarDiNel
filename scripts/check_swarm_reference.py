@@ -19,7 +19,7 @@ with tempfile.TemporaryDirectory() as temporary:
     root = Path(temporary)
     for key in ("swarma", "swarmb", "swarmc"):
         config = get_satellite(key)
-        paths = download_swarm_orbits(key, date(2026, 9, 2), date(2026, 9, 3), root / key)
+        paths = download_swarm_orbits(key, date(2026, 9, 2), date(2026, 9, 2), root / key)
         start = datetime(2026, 9, 2, tzinfo=timezone.utc)
         end = start + timedelta(hours=24)
         states, provenance = read_swarm_references(paths, config, start, end)
