@@ -19,4 +19,4 @@ jobs:
         with:
           python-version: '3.13'
       - run: python -m pip install requests sgp4 numpy astropy
-      - run: python -m scripts.check_swarm_reference
+      - run: python -u -m scripts.check_swarm_reference

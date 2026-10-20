@@ -22,6 +22,8 @@ from pathlib import Path
 from urllib.parse import urlencode
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util import Retry
 
 from src.core.satellites import SatelliteConfig, get_satellite
 from src.core.prospective_validation import ReferenceUnavailable, State, digest
@@ -36,6 +38,16 @@ MAX_ZIP_BYTES = 10_000_000
 MAX_UNCOMPRESSED_BYTES = 20_000_000
 EARTH_FIXED_FRAMES = {"ITRF", "ITR08", "ITR14", "ITR20", "IGS08", "IGB08",
                       "IGS14", "IGB14", "IGS20", "IGB20", "IGC20"}
+
+
+def _archive_session():
+    """Retry transient failures when reading the public archive."""
+    session = requests.Session()
+    retry = Retry(total=3, connect=3, read=3, status=3, backoff_factor=1,
+                  allowed_methods=frozenset({"GET"}),
+                  status_forcelist=(429, 500, 502, 503, 504))
+    session.mount("https://", HTTPAdapter(max_retries=retry))
+    return session
 
 
 @dataclass(frozen=True)
@@ -266,7 +278,7 @@ def discover_swarm_products(
         raise ValueError("Provide ordered timezone-aware discovery boundaries.")
     if not isinstance(page_size, int) or isinstance(page_size, bool) or page_size <= 0:
         raise ValueError("Page size must be positive.")
-    session = session or requests.Session()
+    session = session or _archive_session()
     products = {}
     directory = f"swarm/Level2daily/Latest_baselines/POD/RD/Sat_{letter}"
     seen_pages = set()
@@ -275,7 +287,7 @@ def discover_swarm_products(
     for page in range(100):
         response = session.get(ARCHIVE_URL, params={
             "do": "list", "file": directory, "maxfiles": page_size, "pos": page * page_size,
-        }, timeout=(15, 90))
+        }, timeout=(30, 90))
         response.raise_for_status()
         payload = response.json()
         if payload.get("success") is not True or not isinstance(payload.get("results"), list):
@@ -313,7 +325,7 @@ def download_swarm_orbits(
     swarm_letter(config)
     start = datetime.combine(start_date, time.min, tzinfo=timezone.utc)
     stop = datetime.combine(end_date, time.max, tzinfo=timezone.utc)
-    session = session or requests.Session()
+    session = session or _archive_session()
     print(f"Searching ESA's public precise-orbit archive for {config.name}...")
     products = discover_swarm_products(config.key, start, stop, session=session)
     if not products:
@@ -329,7 +341,7 @@ def download_swarm_orbits(
         else:
             print(f"[{number}/{len(products)}] Downloading: {target.name}")
             response = session.get(ARCHIVE_URL, params={"do": "download", "file": product.archive_path},
-                                   timeout=(15, 90), stream=True)
+                                   timeout=(30, 90), stream=True)
             response.raise_for_status()
             with tempfile.TemporaryDirectory(dir=destination, prefix=".partial-") as temporary:
                 staging = Path(temporary) / product.filename
