@@ -32,6 +32,10 @@ from src.core.prospective_validation import (
 )
 from src.core.satellites import SATELLITES, get_satellite
 from src.io.tle_reader import TLEData, load_tle_catalog
+from src.io.orbit_references import (
+    resolve_product, native_product, reference_files as select_reference_files,
+    load_reference_states, overlap_description,
+)
 
 
 def checked_satrec(tle: TLEData, norad_id: int) -> Satrec:
@@ -51,7 +55,7 @@ def checked_satrec(tle: TLEData, norad_id: int) -> Satrec:
 
 def evaluate_tle(
     satellite_key: str, tle: TLEData, reference_files: list[Path], output_root: Path,
-    *, product: str = "POE", duration_hours: float = 24, step_seconds: int = 60,
+    *, product: str = "AUTO", duration_hours: float = 24, step_seconds: int = 60,
     thresholds: tuple[float, ...] = (1, 2, 5, 10),
     max_gap_seconds: float = 20, make_plot: bool = True,
     source_catalog: Path | None = None, expected_catalog_hash: str | None = None,
@@ -59,6 +63,7 @@ def evaluate_tle(
     """Publish one complete historical evaluation, or no result on failure."""
     started = perf_counter()
     config = get_satellite(satellite_key)
+    product = resolve_product(config, product)
     if (not math.isfinite(duration_hours) or duration_hours <= 0
             or not math.isfinite(duration_hours * 3600)):
         raise ValueError("Duration must be finite and positive.")
@@ -72,8 +77,8 @@ def evaluate_tle(
     origin = tle.epoch.astimezone(timezone.utc)
     end = origin + timedelta(hours=duration_hours)
     reference_files = [Path(path) for path in reference_files]
-    references, provenance = read_references(
-        reference_files, config.name, product, origin, end,
+    references, provenance = load_reference_states(
+        reference_files, config, product, origin, end,
         max_gap_seconds=max_gap_seconds,
     )
     source_catalog = Path(source_catalog) if source_catalog is not None else None
@@ -163,7 +168,7 @@ def evaluate_tle(
             "evaluation_origin_utc": origin.isoformat(), "evaluation_end_utc": end.isoformat(),
             "duration_hours": duration_hours, "step_seconds": step_seconds,
             "sample_count": len(errors), "reference_grade": product,
-            "reference_product": PRODUCTS[product],
+            "reference_product": native_product(config, product),
             "source_catalog_sha256": catalog_hash, "evaluated_tle_sha256": digest(tle_path),
             "case_group": f"{config.norad_id}:{digest(tle_path)}",
             "mean_error_km": sum(errors) / len(errors), "maximum_error_km": max(errors),
@@ -172,7 +177,7 @@ def evaluate_tle(
             "frame_transformation": transformation,
             "reference_interpolation": "Cubic Hermite; Earth-fixed positions and velocities; no extrapolation",
             "maximum_reference_gap_seconds": max_gap_seconds,
-            "overlap_rule": "Latest Creation_Date wins at each overlapping reference timestamp",
+            "overlap_rule": overlap_description(config),
             "horizon_definition": "First sampled exceedance measured from TLE epoch; bracket and linear estimate separate",
             "limitations": [
                 "Historical reconstruction does not establish prospective forecasting.",
@@ -180,13 +185,15 @@ def evaluate_tle(
                 "Crossings between samples can be missed; linear estimates are not exact crossing times.",
                 "Right-censored horizons remain unknown beyond the evaluated duration.",
                 "Cases sharing an input or overlapping windows are not independent trials.",
-                "EARTH_FIXED is treated as geocentric ITRS; terrestrial realization differences are not modelled.",
+                "Earth-fixed references are treated as geocentric ITRS; terrestrial realization differences are not modelled.",
                 "Synthetic software checks do not establish real-reference scientific accuracy.",
             ],
             "python_version": platform.python_version(),
             "package_versions": {name: version(name) for name in ("astropy", "numpy", "sgp4", "astropy-iers-data")},
             "historical_module_sha256": digest(Path(__file__)),
             "shared_validator_module_sha256": digest(Path(__file__).with_name("prospective_validation.py")),
+            "reference_adapter_sha256": digest(Path(__file__).parents[1] / "io" / "orbit_references.py"),
+            "swarm_reader_sha256": digest(Path(__file__).parents[1] / "io" / "swarm_orbits.py") if config.reference_provider == "swarm_sp3" else None,
             "capture_module_sha256": digest(Path(__file__).with_name("prospective_capture.py")),
             "propagator_module_sha256": digest(Path(__file__).with_name("propagator.py")),
             "evaluated_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -204,7 +211,7 @@ def main() -> None:
     parser.add_argument("--tle-file", type=Path, required=True,
                         help="Explicit input catalog, e.g. output from tle_sampler.")
     parser.add_argument("--reference-dir", type=Path)
-    parser.add_argument("--product", choices=list(PRODUCTS), default="POE")
+    parser.add_argument("--product", choices=["AUTO", "POE", "MOE", "PSO"], default="AUTO")
     parser.add_argument("--output-root", type=Path, default=RESULTS_DIR / "historical_validation")
     parser.add_argument("--duration-hours", type=float, default=24)
     parser.add_argument("--step-seconds", type=int, default=60)
@@ -219,10 +226,7 @@ def main() -> None:
             raise ValueError("Input catalog changed while being loaded.")
         config = get_satellite(args.satellite)
         reference_dir = args.reference_dir if args.reference_dir is not None else get_reference_dir(config.key)
-        references = sorted(path for path in reference_dir.rglob("*")
-                            if path.is_file() and path.suffix.upper() == ".EOF"
-                            and path.name.startswith(config.short_name + "_")
-                            and f"_{PRODUCTS[args.product]}_" in path.name)
+        references = select_reference_files(reference_dir, config, args.product)
         if not tles:
             raise ValueError("No TLE entries found.")
         # Check the whole catalog before publishing any cases.

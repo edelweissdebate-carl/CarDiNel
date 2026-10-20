@@ -270,7 +270,7 @@ def transform_predictions(states: list[State], output: Path) -> tuple[list[tuple
 
 def validate_capture(
     capture_folder: Path, reference_files: list[Path], output_root: Path,
-    *, product: str = "POE", thresholds: tuple[float, ...] = (1, 2, 5, 10),
+    *, product: str = "AUTO", thresholds: tuple[float, ...] = (1, 2, 5, 10),
     max_gap_seconds: float = 20.0, make_plot: bool = True,
 ) -> Path:
     capture_folder, output_root = Path(capture_folder), Path(output_root)
@@ -282,8 +282,10 @@ def validate_capture(
         horizon_summary([datetime(2000, 1, 1, tzinfo=timezone.utc)], [0.0], threshold)
     manifest, predictions = load_capture(capture_folder)
     config = get_satellite(manifest["satellite_key"])
-    references, provenance = read_references(
-        reference_files, config.name, product, predictions[0].time, predictions[-1].time,
+    from src.io.orbit_references import resolve_product, load_reference_states, native_product, overlap_description
+    product = resolve_product(config, product)
+    references, provenance = load_reference_states(
+        reference_files, config, product, predictions[0].time, predictions[-1].time,
         max_gap_seconds=max_gap_seconds,
     )
     manifest_hash = digest(capture_folder / "manifest.json")
@@ -325,7 +327,7 @@ def validate_capture(
             "schema_version": 1, "status": f"validated_against_{product.lower()}",
             "capture_id": manifest["capture_id"], "satellite_key": config.key,
             "satellite_name": config.name, "norad_id": config.norad_id,
-            "reference_product": PRODUCTS[product], "reference_grade": product,
+            "reference_product": native_product(config, product), "reference_grade": product,
             "capture_manifest_sha256": manifest_hash,
             "source_tle_sha256": manifest["sha256"]["source_response.tle"],
             "case_group": f"{config.norad_id}:{manifest['sha256']['source_response.tle']}",
@@ -338,7 +340,7 @@ def validate_capture(
             "horizons": horizons, "references": provenance, "frame_transformation": transform,
             "reference_interpolation": "Cubic Hermite, Earth-fixed positions and velocities; no extrapolation",
             "maximum_reference_gap_seconds": max_gap_seconds,
-            "overlap_rule": "Latest Creation_Date wins at each overlapping reference timestamp",
+            "overlap_rule": overlap_description(config),
             "horizon_definition": "First sampled exceedance; linear crossing estimate and bracket also reported",
             "limitations": [
                 "Crossings between forecast samples can be missed.",
@@ -346,11 +348,13 @@ def validate_capture(
                 "A censored horizon is unknown beyond the observation window.",
                 "Captures sharing a TLE or overlapping forecast windows are not independent cases.",
                 "Hashes and local timestamps do not constitute external timestamp certification.",
-                "EARTH_FIXED reference coordinates are treated as geocentric ITRS; terrestrial realization differences are not modelled.",
+                "Earth-fixed reference coordinates are treated as geocentric ITRS; terrestrial realization differences are not modelled.",
             ],
             "python_version": platform.python_version(),
             "package_versions": {name: version(name) for name in ("astropy", "numpy", "sgp4", "astropy-iers-data")},
             "validator_module_sha256": digest(Path(__file__)),
+            "reference_adapter_sha256": digest(Path(__file__).parents[1] / "io" / "orbit_references.py"),
+            "swarm_reader_sha256": digest(Path(__file__).parents[1] / "io" / "swarm_orbits.py") if config.reference_provider == "swarm_sp3" else None,
             "validated_at_utc": datetime.now(timezone.utc).isoformat(),
         }
         if make_plot:
@@ -385,8 +389,8 @@ def main() -> None:
     targets = parser.add_mutually_exclusive_group(required=True)
     targets.add_argument("--capture", type=Path)
     targets.add_argument("--captures-root", type=Path, help="Recursively find capture manifests.")
-    parser.add_argument("--reference-dir", type=Path, required=True, help="Directory containing downloaded EOF files.")
-    parser.add_argument("--product", choices=list(PRODUCTS), default="POE")
+    parser.add_argument("--reference-dir", type=Path, required=True, help="Directory containing Sentinel EOF or official Swarm ZIP reference files.")
+    parser.add_argument("--product", choices=["AUTO", "POE", "MOE", "PSO"], default="AUTO")
     parser.add_argument("--output-root", type=Path, default=Path("results/prospective_validation"))
     parser.add_argument("--thresholds-km", type=float, nargs="+", default=[1, 2, 5, 10])
     parser.add_argument("--max-reference-gap-seconds", type=float, default=20)
@@ -398,8 +402,7 @@ def main() -> None:
     )
     if not captures:
         parser.exit(1, "No captures found.\n")
-    files = sorted(path for path in args.reference_dir.rglob("*")
-                   if path.is_file() and path.suffix.upper() == ".EOF")
+    from src.io.orbit_references import reference_files as select_reference_files, resolve_product
     failed = 0
     for capture in captures:
         try:
@@ -407,12 +410,12 @@ def main() -> None:
             # a shared reference directory containing several satellites/products.
             manifest = json.loads((capture / "manifest.json").read_text(encoding="utf-8"))
             config = get_satellite(manifest["satellite_key"])
-            selected = [path for path in files if path.name.startswith(config.short_name + "_")
-                        and f"_{PRODUCTS[args.product]}_" in path.name]
-            output = validate_capture(capture, selected, args.output_root, product=args.product,
+            product = resolve_product(config, args.product)
+            selected = select_reference_files(args.reference_dir, config, product)
+            output = validate_capture(capture, selected, args.output_root, product=product,
                                       thresholds=tuple(args.thresholds_km),
                                       max_gap_seconds=args.max_reference_gap_seconds, make_plot=not args.no_plot)
-            print(f"VALIDATED ({args.product}): {capture.name}\nResults: {output}")
+            print(f"VALIDATED ({product}): {capture.name}\nResults: {output}")
         except ReferenceUnavailable as error:
             failed += 1
             print(f"PENDING: {capture.name}: {error}")

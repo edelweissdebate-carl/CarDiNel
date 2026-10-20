@@ -29,5 +29,6 @@ jobs:
           python -m src.core.prospective_capture --help
           python -m src.core.prospective_validation --help
           python -m src.core.historical_validation --help
+          python -m src.io.download_precise_orbits --help
       - name: Check Python syntax
-        run: python -m compileall -q src tests
+        run: python -m compileall -q src tests scripts

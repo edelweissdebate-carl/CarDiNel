@@ -19,6 +19,8 @@ python -m src.core.prospective_capture --satellite sentinel1c
 ```
 
 Sentinel-1C uses NORAD catalog ID **62261**. Sentinel-1B remains historical only.
+Swarm-A/B/C also support capture (NORAD 39452/39451/39453). Their precise
+reference provider is ESA Swarm, with PSO product labels.
 Adding Sentinel-1C enables the new capture and validation commands; the legacy
 GUI and historical report pipeline still expose their original satellite choices.
 
@@ -69,9 +71,9 @@ metre / metre-per-second units, state count, and validity coverage.
 Incomplete coverage or reference gaps over 20 seconds leave validation pending.
 Missing or malformed inputs fail explicitly. No partial horizon is reported.
 
-For a file obtained through another workflow, retain its original Sentinel
-filename. Supported format here is Sentinel-1 Earth Explorer XML EOF, not an
-arbitrary ephemeris file. Other satellite missions need verified adapters.
+Retain original provider filenames. Supported references are Sentinel-1 Earth
+Explorer XML EOF and official ESA Swarm SP3xCOM_2_ ZIP products. Other formats
+and satellites still require verified adapters.
 
 ## Outputs and method
 
@@ -149,9 +151,9 @@ becoming a supposed 24-hour crossing. Fine-scale crossings between samples can
 still be missed. The summary labels the evaluation `retrospective` and records
 the reference grade, hashes, software versions and processing time.
 
-Optional flags: `--reference-dir`, `--product POE|MOE`, `--duration-hours`,
+Optional flags: `--reference-dir`, `--product AUTO|POE|MOE|PSO`, `--duration-hours`,
 `--step-seconds`, `--thresholds-km`, `--output-root`, and `--no-plot`.
-The supported reference format remains Sentinel-1 Earth Explorer EOF.
+Swarm references use the ESA SP3 adapter described below.
 This command does not add Sentinel-3 support.
 
 The original `batch_analyzer`, its CSVs and its downstream statistics/report
@@ -160,6 +162,63 @@ interpolated horizon relative to the first reference sample, historically
 labelled `exact`. That label must not be interpreted as an exact physical
 crossing. Do not feed the new historical output files into the legacy report
 pipeline or pool measurements with different horizon definitions.
+
+## 4. Swarm A/B/C with 2026 public reference data
+
+No Copernicus account is needed for the ESA Swarm download. Space-Track
+credentials remain necessary for TLE acquisition. The new study sample is
+Sentinel-1A, Sentinel-1C and Swarm A/B/C; Sentinel-1B is historical-only.
+The September 2026 archive has been checked for all three Swarm spacecraft.
+
+Start with a one-day historical pilot using the same dates as the Sentinel-1C check:
+
+```powershell
+python -m src.io.download_precise_orbits --satellite swarma --start 2026-09-01 --end 2026-09-02
+python -m src.io.download_tles --satellite swarma --start 2026-09-01 --end 2026-09-02
+python -m src.core.tle_sampler --satellite swarma --start 2026-09-01 --end 2026-09-01
+python -m src.core.historical_validation --satellite swarma --tle-file "data/swarma/tle/swarma_sampled_2026-09-01_to_2026-09-01.tle"
+```
+
+Replace `swarma` with `swarmb` or `swarmc` for the other spacecraft.
+Keep reference ZIPs intact in `data/<satellite>/reference/`. The downloader
+paginates the public archive, chooses the highest processing baseline for a
+daily validity period, validates each ZIP before publication, reuses validated
+local files and saves a uniquely named provenance record. Small adjacent-day
+margins allow interpolation across the GPS/UTC day boundary. Unavailable
+coverage fails explicitly.
+
+The reader requires matching ZIP and XML product names, mission, spacecraft,
+processing version, quality fields and UTC validity. It checks the SP3
+satellite code (L47/L48/L49), Earth-fixed frame, GPS time, declared epoch count,
+ordered position/velocity pairs and file termination. Unexpected, predicted,
+missing, ambiguous or truncated inputs are rejected. ZIP members are read in
+memory without extraction. Positions stay in kilometres; velocities convert
+from decimetres/second to kilometres/second. GPS calendar time is converted
+through TAI with Astropy's leap-second table, rather than assuming a fixed
+GPS-to-UTC offset for every historical date.
+
+Reference grade defaults to `AUTO`: Sentinel uses POE, Swarm uses **PSO**,
+specifically `SP3ACOM_2_`, `SP3BCOM_2_` or `SP3CCOM_2_`. A Sentinel MOE or POE
+label cannot be applied to Swarm. Highest processing baseline and then latest
+creation time determine overlaps. Native frames, time systems, units and
+conversion settings are retained with reference hashes. All terrestrial frames
+are treated as geocentric ITRS; small realization differences are not modelled.
+The same Hermite interpolation and sampled-horizon calculations are used across
+missions. Differences in provider and reference product must be considered in
+cross-mission interpretation; a pooled operational reliability claim is not
+established by this software.
+
+`prospective_capture --satellite swarma` also saves a new fixed forecast.
+Subsequent validation accepts Swarm ZIPs with `--product PSO` (or AUTO).
+Published precise science products have a processing delay: this adapter does
+not make October 21 forecasts retrospectively available by October 26.
+The common 2026 historical evaluation and the prospective pilot remain separate.
+
+Offline checks use synthetic inputs and mocked HTTP. A separate credential-free
+workflow, `Public Swarm reference access`, exercises the real ESA archive and
+complete 24-hour reference coverage, unit/time checks and comparison of Hermite
+interpolation with an independent position-only polynomial interpolant. These
+checks are not measurements of TLE forecast error.
 
 ## Checks
 
@@ -176,6 +235,11 @@ do not certify scientific agreement with real POE or MOE. A credential-free
 GitHub Actions workflow runs the checks on Windows and Linux with Python 3.13.
 
 ## Sources
+
+- [ESA/TU Delft Swarm precise orbit product](https://swarm-disc.github.io/product-catalogue-tools/SW_SP3xCOM_2_.html)
+- [ESA Swarm public archive](https://swarm-diss.eo.esa.int/#swarm/Level2daily/Latest_baselines/POD/RD)
+- [NASA SP3 spacecraft/NORAD correspondence](https://cddis.nasa.gov/sp3c_satlist.html)
+- [SP3 format specification](https://gssc.esa.int/wp-content/uploads/2018/07/sp3d.pdf)
 
 - [Space-Track documentation](https://www.space-track.org/documentation)
 - [Sentinel-1 products and latency](https://sentiwiki.copernicus.eu/web/s1-processing)
