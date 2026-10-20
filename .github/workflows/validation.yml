@@ -28,5 +28,6 @@ jobs:
         run: |
           python -m src.core.prospective_capture --help
           python -m src.core.prospective_validation --help
+          python -m src.core.historical_validation --help
       - name: Check Python syntax
         run: python -m compileall -q src tests
