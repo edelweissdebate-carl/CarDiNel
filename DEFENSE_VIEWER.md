@@ -29,6 +29,35 @@ read without extraction. A `study_audit.json` beside it supplies matching
 quality annotations; absence of this file means quality is **unknown**, not
 unflagged. A changed summary cannot inherit a previous audit annotation.
 
+## 3D Earth and satellite error
+
+The **3D Earth** tab opens first. It shows the selected satellite's saved
+precise-reference position in cyan and its SGP4 prediction in amber, with a
+90-minute trail, a time slider and Play/Pause controls. These are two position
+estimates of the same satellite. Satellite icons are schematic and enlarged;
+they do not depict measured spacecraft dimensions or attitude.
+
+Use **Expand 3D view** for a full-screen defense presentation. Drag either 3D
+view to rotate it. **Reset view** points the globe camera toward the selected
+satellite. Press Escape or **Exit full screen** to return. The globe correctly
+hides points behind Earth; their actual offsets remain visible in the close-up.
+
+The globe defaults to **Magnified ×500** because kilometre-scale errors are
+hard to see next to Earth. This changes only the displayed difference:
+`displayed = reference + magnification × (prediction − reference)`.
+Choose **True scale ×1** for the archived positions. The right panel always
+shows the actual ITRS XYZ offset in kilometres; the numeric error remains
+unmagnified. No new orbit propagation or between-sample trajectory calculation
+is performed. Playback advances through saved samples; speed settings control
+presentation speed, not mission time. Earth is a fixed 6371 km presentation
+sphere because the coordinates are Earth-fixed ITRS. Trails connect saved
+samples and are a visual aid, not a new continuous-accuracy estimate.
+
+The land mask is bundled Natural Earth 1:110m public-domain vector data:
+https://github.com/nvkelso/natural-earth-vector/blob/master/geojson/ne_110m_land.geojson
+The upstream terms are included at `assets/earth/LICENSE.md`. This map is a
+presentation aid and is not used in any orbit or error calculation.
+
 ## Demonstration
 
 1. Start with Sentinel-1C and a daily TLE epoch. Explain that the graph is a

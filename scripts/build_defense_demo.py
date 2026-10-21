@@ -37,7 +37,8 @@ def build(results_zip: Path, case_audit: Path, output: Path):
     output.parent.mkdir(parents=True, exist_ok=True)
     with ZipFile(output, 'w', ZIP_DEFLATED) as bundle:
         for name in ('src/__init__.py', 'src/core/__init__.py', 'src/gui/__init__.py',
-                     'src/core/result_archive.py', 'src/gui/defense_window.py', 'src/defense.py',
+                     'src/core/result_archive.py', 'src/gui/defense_window.py', 'src/gui/earth_error_view.py', 'src/defense.py',
+                     'assets/earth/ne_110m_land.geojson', 'assets/earth/LICENSE.md',
                      'Launch_Defense.cmd', 'DEFENSE_VIEWER.md', 'requirements-defense.txt'):
             bundle.write(ROOT/name, prefix+name)
         bundle.write(results_zip, prefix+'defense_demo/may_results.zip', compress_type=ZIP_STORED)

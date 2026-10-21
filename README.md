@@ -265,3 +265,13 @@ case files. Every displayed case is checked against recorded output hashes,
 its error vectors, RMS and first sampled crossings. The prepared download
 contains saved May results; those study files are not committed to this repo.
 See [DEFENSE_VIEWER.md](DEFENSE_VIEWER.md) for launch and packaging instructions.
+
+### 3D Earth presentation
+
+The defense viewer includes an offline 3D Earth tab using the saved ITRS
+positions, with cyan reference / amber prediction markers, playback, scrubbing,
+a 90-minute trail and a full-screen presentation view. Globe separation can be
+magnified explicitly; the adjacent XYZ error close-up and numerical error stay
+at actual scale. Earth occludes far-side markers. No propagation or downloads
+are performed. The bundled Natural Earth land mask is a public-domain
+presentation asset; see DEFENSE_VIEWER.md for its source and interpretation.

@@ -16,6 +16,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolb
 from matplotlib.figure import Figure
 
 from src.core.result_archive import ResultArchive, SATELLITES
+from src.gui.earth_error_view import EarthErrorView
 
 COLORS = {1: '#b45309', 2: '#c2415c', 5: '#6d4cc4', 10: '#50677d'}
 
@@ -88,6 +89,7 @@ class DefenseWindow(QMainWindow):
         self.metrics = label('No case selected', 'metrics'); layout.addWidget(self.metrics)
         self.quality = label('Reference-quality annotations are shown when supplied with the study.', 'quality'); layout.addWidget(self.quality)
         self.tabs = QTabWidget(); layout.addWidget(self.tabs, 1)
+        self.earth_view = EarthErrorView(); self.tabs.addTab(self.earth_view, '3D Earth')
         plot_page = QWidget(); pl = QVBoxLayout(plot_page)
         self.figure = Figure(figsize=(9, 3.6), layout='constrained', facecolor='white')
         self.canvas = FigureCanvasQTAgg(self.figure); self.canvas.setMinimumHeight(200); self.axes = self.figure.add_subplot(111)
@@ -128,6 +130,7 @@ class DefenseWindow(QMainWindow):
 
     def clear_case(self):
         self.current_case = self.current_series = None
+        self.earth_view.set_series(None,None)
         self.metrics.setText('No case selected'); self.details.clear(); self.horizon_table.setRowCount(0)
         self.threshold_caption.setText('No case selected')
         self.quality.setText('Reference-quality annotation unavailable.'); self.quality.setStyleSheet('background:#e8edf3; padding:9px;')
@@ -189,6 +192,7 @@ class DefenseWindow(QMainWindow):
         finally:
             QApplication.restoreOverrideCursor()
         self.last_error = None; self.current_case = case; self.current_series = series; s = case.summary
+        self.earth_view.set_series(case,series)
         self.metrics.setText(f'{SATELLITES[case.satellite][0]}   |   RMS {s["rms_error_km"]:.3f} km   |   Maximum {s["maximum_error_km"]:.3f} km   |   {s["sample_count"]:,} samples / {s["duration_hours"]:g} h')
         self.quality.setText(case.quality_label)
         shade = '#fff0d6' if case.flagged_samples else '#e8f2ed' if case.flagged_samples == 0 else '#e8edf3'
@@ -228,6 +232,10 @@ class DefenseWindow(QMainWindow):
         else:
             ax.text(.5,.5,'Select a saved historical case',transform=ax.transAxes,ha='center',va='center',color='#657a90')
         self.canvas.draw_idle()
+
+    def closeEvent(self, event):
+        self.earth_view.pause()
+        super().closeEvent(event)
 
     def export_plot(self):
         if self.current_case is None: return

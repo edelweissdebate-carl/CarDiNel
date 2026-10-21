@@ -67,6 +67,9 @@ class Series:
     hours: tuple[float, ...]
     errors: tuple[float, ...]
     tle: str
+    times_utc: tuple[str, ...]
+    predicted_itrs_km: tuple[tuple[float, float, float], ...]
+    reference_itrs_km: tuple[tuple[float, float, float], ...]
 
 
 class ResultArchive:
@@ -170,7 +173,9 @@ class ResultArchive:
             if first is not None:
                 require(abs(first-finite(recorded)) < 1e-8, 'Saved threshold crossing disagrees with error series.')
             require(bool(horizon['right_censored']) == (first is None), 'Saved censoring flag disagrees with error series.')
-        return Series(hours, errors, tle)
+        return Series(hours, errors, tle, tuple(r['time_utc'] for r in rows),
+                      tuple(tuple(finite(r[f'pred_{a}_itrs_km']) for a in 'xyz') for r in rows),
+                      tuple(tuple(finite(r[f'ref_{a}_itrs_km']) for a in 'xyz') for r in rows))
 
     def filtered(self, satellite=None, screened=False):
         return tuple(c for c in self.cases if (not satellite or c.satellite == satellite) and (not screened or c.flagged_samples == 0))
