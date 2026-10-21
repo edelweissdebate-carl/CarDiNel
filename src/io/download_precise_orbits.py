@@ -98,6 +98,10 @@ def download_precise_orbits(
         satellite_key
     )
 
+    if satellite.reference_provider == "swarm_sp3":
+        from src.io.swarm_orbits import download_swarm_orbits
+        return download_swarm_orbits(satellite.key, start_date, end_date, get_reference_dir(satellite.key))
+
     start_time, stop_time = (
         date_range_to_datetimes(
             start_date=start_date,
@@ -227,8 +231,8 @@ def download_precise_orbits(
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Download Sentinel AUX_POEORB precise-orbit "
-            "products for ORBIT-TRUST."
+            "Download Sentinel POE or Swarm precise science orbit "
+            "products from their public archives."
         )
     )
 

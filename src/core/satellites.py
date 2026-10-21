@@ -11,6 +11,9 @@ class SatelliteConfig:
     name: str
     short_name: str
     norad_id: int
+    prospective_collection_enabled: bool = True
+    reference_provider: str = "sentinel_eof"
+    reference_satellite_id: str = ""
 
 
 SATELLITES: dict[str, SatelliteConfig] = {
@@ -25,6 +28,22 @@ SATELLITES: dict[str, SatelliteConfig] = {
         name="Sentinel-1B",
         short_name="S1B",
         norad_id=41456,
+        prospective_collection_enabled=False,
+    ),
+    "sentinel1c": SatelliteConfig(
+        key="sentinel1c", name="Sentinel-1C", short_name="S1C", norad_id=62261,
+    ),
+    "swarma": SatelliteConfig(
+        key="swarma", name="Swarm-A", short_name="SWA", norad_id=39452,
+        reference_provider="swarm_sp3", reference_satellite_id="L47",
+    ),
+    "swarmb": SatelliteConfig(
+        key="swarmb", name="Swarm-B", short_name="SWB", norad_id=39451,
+        reference_provider="swarm_sp3", reference_satellite_id="L48",
+    ),
+    "swarmc": SatelliteConfig(
+        key="swarmc", name="Swarm-C", short_name="SWC", norad_id=39453,
+        reference_provider="swarm_sp3", reference_satellite_id="L49",
     ),
 }
 

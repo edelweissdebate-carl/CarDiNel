@@ -202,6 +202,52 @@ class SpaceTrackClient:
 
         return line_1_count
 
+    @staticmethod
+    def build_current_query(norad_catalog_id: int) -> str:
+        """Query the latest GP record, without requesting GP history."""
+        if (
+            isinstance(norad_catalog_id, bool)
+            or not isinstance(norad_catalog_id, int)
+            or not 0 < norad_catalog_id <= 99999
+        ):
+            raise ValueError("Legacy TLE queries require a NORAD ID from 1 to 99999.")
+        return (
+            f"{BASE_URL}/basicspacedata/query/class/gp"
+            f"/NORAD_CAT_ID/{norad_catalog_id}/format/tle"
+        )
+
+    def fetch_current_tle(self, norad_catalog_id: int) -> str:
+        """Return the original current-GP response after checking its TLE pair.
+
+        No historical-data cache is used. The caller must record acquisition
+        times and archive the returned response before using it in a forecast.
+        """
+        from sgp4.io import verify_checksum
+
+        from src.core.propagator import validate_tle_lines
+
+        response = self.session.get(
+            self.build_current_query(norad_catalog_id),
+            timeout=self.timeout_seconds,
+        )
+        if response.status_code != 200:
+            raise SpaceTrackError(
+                f"Current TLE request failed with HTTP {response.status_code}."
+            )
+        lines = [line.strip() for line in response.text.splitlines() if line.strip()]
+        if len(lines) != 2:
+            raise SpaceTrackError("Expected exactly one current two-line TLE record.")
+        try:
+            validate_tle_lines(*lines)
+            if any(len(line) != 69 for line in lines):
+                raise ValueError("TLE lines must contain 69 characters.")
+            if any(int(line[2:7]) != norad_catalog_id for line in lines):
+                raise ValueError("TLE satellite identifier does not match the request.")
+            verify_checksum(*lines)
+        except ValueError as error:
+            raise SpaceTrackError(f"Invalid current TLE response: {error}") from error
+        return response.text
+
     def close(self) -> None:
         self.session.close()
 
