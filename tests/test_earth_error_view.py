@@ -10,6 +10,7 @@ from test_result_viewer import fixture
 
 try:
     from PySide6.QtWidgets import QApplication
+    from PySide6.QtCore import QCoreApplication, QEvent
     from src.gui.earth_error_view import EarthErrorView, displayed_prediction, visible_above_globe
 except ImportError:
     QApplication = EarthErrorView = None
@@ -29,7 +30,9 @@ class EarthErrorViewTests(unittest.TestCase):
         self.view = EarthErrorView(); self.view.set_series(self.case,self.series)
 
     def tearDown(self):
-        self.view.close(); self.temp.cleanup()
+        self.view.close(); self.view.deleteLater()
+        QCoreApplication.sendPostedEvents(None,QEvent.DeferredDelete)
+        self.app.processEvents(); self.temp.cleanup()
 
     def test_magnification_applies_only_to_error_and_preserves_archived_vectors(self):
         reference = np.asarray(self.series.reference_itrs_km)

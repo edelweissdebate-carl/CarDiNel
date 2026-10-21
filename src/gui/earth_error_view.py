@@ -10,6 +10,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg, NavigationToolb
 from matplotlib.figure import Figure
 from matplotlib.path import Path as PolygonPath
 from PySide6.QtCore import Qt, QTimer
+from shiboken6 import isValid
 from PySide6.QtWidgets import (
     QComboBox, QDialog, QHBoxLayout, QLabel, QPushButton, QSlider, QVBoxLayout, QWidget,
 )
@@ -243,7 +244,10 @@ class EarthErrorView(QWidget):
         self.slider.setValue(next((i for i,e in enumerate(self.series.errors) if e>1),0))
 
     def pause(self):
-        self.timer.stop();self.play.setText('Play')
+        # Qt can deliver hideEvent while a parent is destroying its children.
+        # Never call methods on C++ controls already deleted during shutdown.
+        if isValid(self.timer):self.timer.stop()
+        if isValid(self.play):self.play.setText('Play')
 
     def open_presentation(self):
         if self.series is None:return
@@ -254,7 +258,7 @@ class EarthErrorView(QWidget):
         view.scale.setCurrentIndex(self.scale.currentIndex()); view.set_series(self.case,self.series)
         view.slider.setValue(self.slider.value()); view.reset_view()
         dialog.finished.connect(lambda *_:view.pause())
-        dialog.showFullScreen(); dialog.exec(); view.pause()
+        dialog.showFullScreen(); dialog.exec(); view.pause(); dialog.deleteLater()
 
     def hideEvent(self,event):
         self.pause();super().hideEvent(event)
