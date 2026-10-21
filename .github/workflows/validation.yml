@@ -11,6 +11,8 @@ permissions:
 jobs:
   test:
     runs-on: ${{ matrix.os }}
+    env:
+      QT_QPA_PLATFORM: offscreen
     strategy:
       fail-fast: false
       matrix:
@@ -21,14 +23,19 @@ jobs:
         with:
           python-version: '3.13'
       - name: Install analysis and test dependencies
-        run: python -m pip install sgp4 requests python-dotenv numpy astropy matplotlib boto3
+        run: python -m pip install sgp4 requests python-dotenv numpy astropy matplotlib boto3 PySide6
       - name: Run offline tests
         run: python -m unittest discover -s tests -v
       - name: Check command entry points
         run: |
+          python -m src.defense --help
           python -m src.core.prospective_capture --help
           python -m src.core.prospective_validation --help
           python -m src.core.historical_validation --help
           python -m src.io.download_precise_orbits --help
+      - name: Check Windows launcher
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: Launch_Defense.cmd --help
       - name: Check Python syntax
         run: python -m compileall -q src tests scripts

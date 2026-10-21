@@ -1,5 +1,6 @@
 from PySide6.QtWidgets import (
     QLabel,
+    QPushButton,
     QMainWindow,
     QTabWidget,
     QVBoxLayout,
@@ -75,6 +76,11 @@ class MainWindow(QMainWindow):
             "Results",
         )
 
+        defense_button = QPushButton("Open Defense Results")
+        defense_button.clicked.connect(self.open_defense_results)
+        self.tabs.setCornerWidget(defense_button)
+        self.defense_window = None
+
         self.setCentralWidget(
             self.tabs
         )
@@ -82,6 +88,14 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(
             "ORBIT-TRUST ready"
         )
+
+    def open_defense_results(self):
+        from src.gui.defense_window import DefenseWindow
+        if self.defense_window is None:
+            self.defense_window = DefenseWindow()
+        self.defense_window.show()
+        self.defense_window.raise_()
+        self.defense_window.activateWindow()
 
     @staticmethod
     def create_placeholder(

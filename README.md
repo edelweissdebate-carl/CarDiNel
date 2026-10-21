@@ -249,3 +249,19 @@ GitHub Actions workflow runs the checks on Windows and Linux with Python 3.13.
 - [Astropy IERS data](https://docs.astropy.org/en/stable/utils/iers.html)
 - [CelesTrak SAR catalog, including Sentinel-1C](https://celestrak.org/Norad/elements/table.php?FORMAT=json&GROUP=sar)
 - [Sentinel-1B end of mission](https://www.esa.int/Applications/Observing_the_Earth/Copernicus/Sentinel-1/Mission_ends_for_Copernicus_Sentinel-1B_satellite)
+
+## Offline defense results viewer
+
+Launch the focused desktop viewer with `python -m src.defense` or the Windows
+`Launch_Defense.cmd` launcher. It reads an existing results ZIP or extracted
+batch, presents satellite/date selectors, error curves, sampled threshold
+crossings, censoring, provenance, and a study overview. The optional quality
+filter excludes flagged cases and cases without matching audit annotations.
+The existing `src.main` window includes an Open Defense Results button.
+
+This viewer requires PySide6 and matplotlib (`requirements-defense.txt`). It
+performs no network requests or orbital propagation. It does not change saved
+case files. Every displayed case is checked against recorded output hashes,
+its error vectors, RMS and first sampled crossings. The prepared download
+contains saved May results; those study files are not committed to this repo.
+See [DEFENSE_VIEWER.md](DEFENSE_VIEWER.md) for launch and packaging instructions.
